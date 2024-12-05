@@ -1,40 +1,45 @@
 #!/bin/bash
 
 # Variáveis
-USER_HOME="/home/usuario"  # Substitua por seu diretório de usuário
+USER_HOME="/home/$(whoami)"  # Diretório do usuário
 JELLYFIN_DIR="$USER_HOME/jellyfin"
 MOVIES_DIR="$JELLYFIN_DIR/movies"
 SERIES_DIR="$JELLYFIN_DIR/series"
 CONFIG_DIR="$JELLYFIN_DIR/config"
 CACHE_DIR="$JELLYFIN_DIR/cache"
 
+# Função para verificar a existência de um comando
+command_exists() {
+  command -v "$1" &>/dev/null
+}
+
 # Atualizar pacotes e instalar dependências
 echo "Atualizando pacotes..."
 sudo apt update -y
-sudo apt install -y apt-transport-https ca-certificates curl software-properties-common
+sudo apt upgrade -y
+sudo apt dist-upgrade -y
 
-# Adicionar chave GPG do Docker
-echo "Adicionando chave GPG do Docker..."
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg || { echo "Falha ao adicionar a chave GPG do Docker"; exit 1; }
+# Instalar pacotes básicos
+echo "Instalando dependências básicas..."
+sudo apt install -y apt-transport-https ca-certificates curl software-properties-common git
 
-# Adicionar repositório Docker
-echo "Adicionando repositório Docker..."
-UBUNTU_VERSION=$(lsb_release -cs) || { echo "Falha ao determinar a versão do Ubuntu"; exit 1; }
-echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $UBUNTU_VERSION stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-# Instalar Docker
-echo "Instalando o Docker..."
-sudo apt update -y
-sudo apt install -y docker-ce
-if ! dpkg -l | grep -q docker-ce; then
-  echo "Erro ao instalar Docker"; exit 1;
+# Instalar Docker, se não estiver instalado
+if ! command_exists docker; then
+  echo "Instalando Docker..."
+  curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+  echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+  sudo apt update -y
+  sudo apt install -y docker-ce docker-ce-cli containerd.io
+else
+  echo "Docker já está instalado."
 fi
 
-# Instalar Docker Compose
-echo "Instalando Docker Compose..."
-sudo apt install -y docker-compose
-if ! dpkg -l | grep -q docker-compose; then
-  echo "Erro ao instalar Docker Compose"; exit 1;
+# Instalar Docker Compose, se não estiver instalado
+if ! command_exists docker-compose; then
+  echo "Instalando Docker Compose..."
+  sudo apt install -y docker-compose
+else
+  echo "Docker Compose já está instalado."
 fi
 
 # Verificar versões do Docker e Docker Compose
@@ -43,14 +48,23 @@ docker --version
 echo "Verificando versões do Docker Compose..."
 docker-compose --version
 
+# Clonar o repositório do Jellyfin
+echo "Clonando o repositório Jellyfin..."
+if [ ! -d "$JELLYFIN_DIR" ]; then
+  git clone https://github.com/shazaltman/jellyfin-server.git "$JELLYFIN_DIR"
+else
+  echo "Repositório Jellyfin já existe em $JELLYFIN_DIR"
+fi
+
 # Criar diretórios para o Jellyfin
 echo "Criando diretórios para o Jellyfin..."
 mkdir -p "$CONFIG_DIR" "$CACHE_DIR" "$MOVIES_DIR" "$SERIES_DIR"
 
 # Ajustar permissões dos diretórios
+echo "Ajustando permissões dos diretórios..."
 sudo chown -R $USER:$USER "$JELLYFIN_DIR"
 
-# Criar arquivo docker-compose.yml
+# Criar o arquivo docker-compose.yml, se não existir
 echo "Criando o arquivo docker-compose.yml..."
 cat <<EOF > "$JELLYFIN_DIR/docker-compose.yml"
 version: "3.8"
