@@ -28,44 +28,40 @@ sudo chmod +x /usr/local/bin/docker-compose
 # Verificar a versão do Docker Compose
 docker-compose --version
 
-# Criar diretórios para Jellyfin (Filmes e Séries)
-echo "Criando diretórios para Jellyfin..."
-mkdir -p ~/jellyfin/movies
-mkdir -p ~/jellyfin/series
-mkdir -p ~/jellyfin/config
-mkdir -p ~/jellyfin/cache
+# Criar diretórios para o Jellyfin (configurações, filmes, séries)
+mkdir -p ~/jellyfin/config ~/jellyfin/movies ~/jellyfin/series
 
-# Criar arquivo docker-compose.yml com a configuração do Jellyfin
+# Navegar para o diretório Jellyfin
 cd ~/jellyfin
 
+# Criar o arquivo docker-compose.yml
 cat <<EOF > docker-compose.yml
-version: '3.8'
+version: '3'
 services:
   jellyfin:
     image: jellyfin/jellyfin:latest
     container_name: jellyfin
-    restart: unless-stopped
     ports:
-      - "8096:8096"  # Porta para acessar o servidor web
+      - "8096:8096"  # Porta padrão para acesso ao Jellyfin
     volumes:
-      - ./config:/config  # Volume para configurações
-      - ./cache:/cache  # Volume para cache
-      - ./movies:/media/movies  # Volume para filmes
-      - ./series:/media/series  # Volume para séries
+      - ./config:/config  # Diretório para armazenar configurações do Jellyfin
+      - ./movies:/movies  # Pasta de filmes
+      - ./series:/series  # Pasta de séries
     environment:
-      - PUID=1000  # UID do usuário (substitua se necessário)
-      - PGID=1000  # GID do grupo (substitua se necessário)
-      - TZ=America/Sao_Paulo  # Fuso horário
-    restart: unless-stopped
+      - TZ=America/Sao_Paulo  # Definir o fuso horário
+    restart: unless-stopped  # Reiniciar o container se parar, exceto em caso de falha manual
 EOF
 
-# Iniciar o Jellyfin com Docker Compose
-echo "Iniciando o Jellyfin com Docker Compose..."
+# Iniciar o Jellyfin com Docker Compose em segundo plano
 sudo docker-compose up -d
 
-# Verificar se o container Jellyfin está em execução
+# Verificar se o Jellyfin está em execução
 echo "Verificando se o Jellyfin está em execução..."
-sudo docker ps
+sudo docker-compose ps
 
-# Conclusão
+# Exibir logs do container
+echo "Exibindo logs do Jellyfin..."
+sudo docker-compose logs -f
+
+# Mensagem final
 echo "Jellyfin instalado e em execução! Acesse a interface web em http://localhost:8096 para configurar o servidor."
