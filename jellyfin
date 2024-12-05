@@ -1,99 +1,71 @@
 #!/bin/bash
 
-# Variáveis
-USER_HOME="/home/$(whoami)"  # Diretório do usuário
-JELLYFIN_DIR="$USER_HOME/jellyfin"
-MOVIES_DIR="$JELLYFIN_DIR/movies"
-SERIES_DIR="$JELLYFIN_DIR/series"
-CONFIG_DIR="$JELLYFIN_DIR/config"
-CACHE_DIR="$JELLYFIN_DIR/cache"
-
-# Função para verificar a existência de um comando
-command_exists() {
-  command -v "$1" &>/dev/null
-}
-
 # Atualizar pacotes e instalar dependências
-echo "Atualizando pacotes..."
-sudo apt update -y
-sudo apt upgrade -y
-sudo apt dist-upgrade -y
+sudo apt update && sudo apt upgrade -y
+sudo apt install apt-transport-https ca-certificates curl software-properties-common -y
 
-# Instalar pacotes básicos
-echo "Instalando dependências básicas..."
-sudo apt install -y apt-transport-https ca-certificates curl software-properties-common git
+# Adicionar repositório do Docker
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 
-# Instalar Docker, se não estiver instalado
-if ! command_exists docker; then
-  echo "Instalando Docker..."
-  curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-  echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-  sudo apt update -y
-  sudo apt install -y docker-ce docker-ce-cli containerd.io
-else
-  echo "Docker já está instalado."
-fi
+# Atualizar pacotes novamente após adicionar o repositório Docker
+sudo apt update
 
-# Instalar Docker Compose, se não estiver instalado
-if ! command_exists docker-compose; then
-  echo "Instalando Docker Compose..."
-  sudo apt install -y docker-compose
-else
-  echo "Docker Compose já está instalado."
-fi
+# Instalar Docker e Docker Compose
+sudo apt install docker-ce docker-ce-cli containerd.io -y
 
-# Verificar versões do Docker e Docker Compose
-echo "Verificando versões do Docker..."
-docker --version
-echo "Verificando versões do Docker Compose..."
+# Verificar a versão do Docker
+sudo docker --version
+
+# Habilitar e iniciar o serviço Docker
+sudo systemctl enable --now docker
+sudo systemctl status docker
+
+# Baixar e configurar Docker Compose
+sudo curl -L "https://github.com/docker/compose/releases/download/v2.21.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+sudo chmod +x /usr/local/bin/docker-compose
+
+# Verificar a versão do Docker Compose
 docker-compose --version
 
-# Clonar o repositório do Jellyfin
-echo "Clonando o repositório Jellyfin..."
-if [ ! -d "$JELLYFIN_DIR" ]; then
-  git clone https://github.com/shazaltman/jellyfin-server.git "$JELLYFIN_DIR"
-else
-  echo "Repositório Jellyfin já existe em $JELLYFIN_DIR"
-fi
+# Criar diretórios para Jellyfin (Filmes e Séries)
+echo "Criando diretórios para Jellyfin..."
+mkdir -p ~/jellyfin/movies
+mkdir -p ~/jellyfin/series
+mkdir -p ~/jellyfin/config
+mkdir -p ~/jellyfin/cache
 
-# Criar diretórios para o Jellyfin
-echo "Criando diretórios para o Jellyfin..."
-mkdir -p "$CONFIG_DIR" "$CACHE_DIR" "$MOVIES_DIR" "$SERIES_DIR"
+# Criar arquivo docker-compose.yml com a configuração do Jellyfin
+cd ~/jellyfin
 
-# Ajustar permissões dos diretórios
-echo "Ajustando permissões dos diretórios..."
-sudo chown -R $USER:$USER "$JELLYFIN_DIR"
-
-# Criar o arquivo docker-compose.yml, se não existir
-echo "Criando o arquivo docker-compose.yml..."
-cat <<EOF > "$JELLYFIN_DIR/docker-compose.yml"
-version: "3.8"
+cat <<EOF > docker-compose.yml
+version: '3.8'
 services:
   jellyfin:
     image: jellyfin/jellyfin:latest
     container_name: jellyfin
     restart: unless-stopped
     ports:
-      - "8096:8096"
+      - "8096:8096"  # Porta para acessar o servidor web
     volumes:
-      - "$JELLYFIN_DIR/config:/config"
-      - "$JELLYFIN_DIR/cache:/cache"
-      - "$JELLYFIN_DIR/movies:/media/movies"
-      - "$JELLYFIN_DIR/series:/media/series"
+      - ./config:/config  # Volume para configurações
+      - ./cache:/cache  # Volume para cache
+      - ./movies:/media/movies  # Volume para filmes
+      - ./series:/media/series  # Volume para séries
     environment:
-      - PUID=1000
-      - PGID=1000
-    network_mode: bridge
+      - PUID=1000  # UID do usuário (substitua se necessário)
+      - PGID=1000  # GID do grupo (substitua se necessário)
+      - TZ=America/Sao_Paulo  # Fuso horário
+    restart: unless-stopped
 EOF
 
 # Iniciar o Jellyfin com Docker Compose
 echo "Iniciando o Jellyfin com Docker Compose..."
-cd "$JELLYFIN_DIR"
-sudo docker-compose up -d || { echo "Falha ao iniciar o Jellyfin"; exit 1; }
+sudo docker-compose up -d
 
 # Verificar se o container Jellyfin está em execução
 echo "Verificando se o Jellyfin está em execução..."
-sudo docker ps --filter "name=jellyfin"
+sudo docker ps
 
 # Conclusão
 echo "Jellyfin instalado e em execução! Acesse a interface web em http://localhost:8096 para configurar o servidor."
